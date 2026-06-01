@@ -1,4 +1,11 @@
 import 'package:flutter/material.dart';
+import 'screens/login_screen.dart';
+import 'screens/register_screen.dart';
+import 'screens/home_screen.dart';
+import 'screens/devices_screen.dart';
+import 'screens/alerts_screen.dart';
+import 'screens/config_screen.dart';
+import 'screens/profile_screen.dart';
 
 void main() {
   runApp(const MainApp());
