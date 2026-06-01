@@ -1,167 +1,107 @@
 import 'package:flutter/material.dart';
+import 'package:enerlex_flutter_project/app_state.dart';
 
-class AlertsScreen extends StatelessWidget {
+class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
+  @override
+  State<AlertsScreen> createState() => _AlertsScreenState();
+}
 
-  static const Color _background = Color(0xFF0F1117);
-  static const Color _cardBg = Color(0xFF1A1D27);
-  static const Color _cardGreen = Color(0xFF0F2A1E);
-  static const Color _accent = Color(0xFF00E5A0);
-  static const Color _textMuted = Color(0xFF6B7280);
+class _AlertsScreenState extends State<AlertsScreen> {
+  static const Color _background  = Color(0xFF0F1117);
+  static const Color _cardBg      = Color(0xFF1A1D27);
+  static const Color _cardGreen   = Color(0xFF0F2A1E);
+  static const Color _accent      = Color(0xFF00E5A0);
+  static const Color _textMuted   = Color(0xFF6B7280);
   static const Color _textPrimary = Color(0xFFE5E7EB);
-  static const Color _redBar = Color(0xFFEF4444);
-  static const Color _orangeBar = Color(0xFFFF6B35);
-  static const Color _yellowDot = Color(0xFFFFB800);
+  static const Color _redBar      = Color(0xFFEF4444);
+  static const Color _orangeBar   = Color(0xFFFF6B35);
 
-  final List<Map<String, dynamic>> _alerts = const [
-    {
-      'device': 'Sistema Global',
-      'message': '¡Sobrecarga térmica! 12 disp. (8832 W)',
-      'color': _redBar,
-      'time': 'Ahora',
-    },
-    {
-      'device': 'Microondas',
-      'message': 'Consumo extremadamente alto (1200W)',
-      'color': _redBar,
-      'time': 'Ahora',
-    },
-    {
-      'device': 'Lavadora',
-      'message': 'Consumo elevado y pesado detectado (500W)',
-      'color': _orangeBar,
-      'time': 'Ahora',
-    },
-    {
-      'device': 'Aire Acondicionado',
-      'message': 'Consumo extremadamente alto (1500W)',
-      'color': _redBar,
-      'time': 'Ahora',
-    },
-    {
-      'device': 'Cafetera',
-      'message': 'Consumo elevado y pesado detectado (800W)',
-      'color': _orangeBar,
-      'time': 'Ahora',
-    },
-    {
-      'device': 'Secadora',
-      'message': 'Consumo extremadamente alto (2500W)',
-      'color': _redBar,
-      'time': 'Ahora',
-    },
-  ];
+  @override
+  void initState() {
+    super.initState();
+    AppState().addListener(_onStateChanged);
+  }
 
-  final List<String> _recommendations = const [
-    'Por favor, apaga o desconecta dispositivos de alto consumo para evitar una falla eléctrica.',
-    'Asegúrate de no dejar Microondas encendido si no es necesario.',
-    'Revisa si puedes activar el modo ahorro en Lavadora.',
-    'Asegúrate de no dejar Aire Acondicionado encendido si no es necesario.',
-    'Revisa si puedes activar el modo ahorro en Cafetera.',
-    'Asegúrate de no dejar Secadora encendido si no es necesario.',
-    'Asegúrate de no dejar Freidora de Aire encendido si no es necesario.',
-  ];
+  @override
+  void dispose() {
+    AppState().removeListener(_onStateChanged);
+    super.dispose();
+  }
+
+  void _onStateChanged() => setState(() {});
 
   @override
   Widget build(BuildContext context) {
+    final state = AppState();
+    final alertas = state.dispositivosConAlerta;
+
     return Scaffold(
       backgroundColor: _background,
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
           children: [
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                children: [
-                  const SizedBox(height: 20),
-                  _buildHeader(),
-                  const SizedBox(height: 20),
-                  ..._alerts.map(_buildAlertCard),
-                  const SizedBox(height: 28),
-                  _buildRecommendationsSection(),
-                  const SizedBox(height: 20),
-                ],
-              ),
-            ),
-            _buildBottomNav(),
+            const SizedBox(height: 20),
+            _buildHeader(alertas.length),
+            const SizedBox(height: 20),
+
+            // Sistema global si hay sobrecarga
+            if (state.totalWatts >= 3000) _buildGlobalAlert(state),
+
+            // Alertas por dispositivo
+            if (alertas.isEmpty)
+              _buildEmptyAlerts()
+            else
+              ...alertas.map((d) => _buildAlertCard(state, d)),
+
+            // Recomendaciones
+            if (alertas.isNotEmpty) ...[
+              const SizedBox(height: 28),
+              _buildRecommendationsSection(state, alertas),
+            ],
+
+            const SizedBox(height: 20),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(int count) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Alertas',
-          style: TextStyle(
-            color: _textPrimary,
-            fontSize: 28,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
+        const Text('Alertas', style: TextStyle(color: _textPrimary, fontSize: 28, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         Text(
-          '${_alerts.length} alertas activas',
+          count == 0 ? 'Sin alertas activas' : '$count alertas activas',
           style: const TextStyle(color: _textMuted, fontSize: 13),
         ),
       ],
     );
   }
 
-  Widget _buildAlertCard(Map<String, dynamic> alert) {
-    final Color barColor = alert['color'] as Color;
-
+  Widget _buildGlobalAlert(AppState state) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: _cardBg,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: BoxDecoration(color: _cardBg, borderRadius: BorderRadius.circular(14)),
       clipBehavior: Clip.hardEdge,
       child: IntrinsicHeight(
         child: Row(
           children: [
-            // Colored left bar
-            Container(
-              width: 4,
-              color: barColor,
-            ),
-            // Content
+            Container(width: 4, color: _redBar),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      alert['device'] as String,
-                      style: const TextStyle(
-                        color: _textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    const Text('Sistema Global', style: TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 4),
-                    Text(
-                      alert['message'] as String,
-                      style: TextStyle(
-                        color: barColor,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    Text('¡Sobrecarga! ${state.encendidos.length} disp. (${state.totalWatts}W)', style: const TextStyle(color: _redBar, fontSize: 13, fontWeight: FontWeight.w500)),
                     const SizedBox(height: 6),
-                    Text(
-                      alert['time'] as String,
-                      style: const TextStyle(
-                        color: _textMuted,
-                        fontSize: 11,
-                      ),
-                    ),
+                    const Text('Ahora', style: TextStyle(color: _textMuted, fontSize: 11)),
                   ],
                 ),
               ),
@@ -172,21 +112,77 @@ class AlertsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRecommendationsSection() {
+  Widget _buildEmptyAlerts() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(color: _cardBg, borderRadius: BorderRadius.circular(14)),
+      child: const Center(
+        child: Column(
+          children: [
+            Icon(Icons.check_circle_outline, color: Color(0xFF00E5A0), size: 40),
+            SizedBox(height: 12),
+            Text('Todo en orden', style: TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+            SizedBox(height: 4),
+            Text('No hay dispositivos con consumo elevado.', style: TextStyle(color: _textMuted, fontSize: 13), textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAlertCard(AppState state, Dispositivo d) {
+    final isExcesivo = d.watts >= AppState.umbralExcesivo;
+    final barColor = isExcesivo ? _redBar : _orangeBar;
+    final msg = isExcesivo
+        ? 'Consumo extremadamente alto (${d.watts}W)'
+        : 'Consumo elevado detectado (${d.watts}W)';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(color: _cardBg, borderRadius: BorderRadius.circular(14)),
+      clipBehavior: Clip.hardEdge,
+      child: IntrinsicHeight(
+        child: Row(
+          children: [
+            Container(width: 4, color: barColor),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(d.nombre, style: const TextStyle(color: _textPrimary, fontSize: 15, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    Text(msg, style: TextStyle(color: barColor, fontSize: 13, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 6),
+                    const Text('Ahora', style: TextStyle(color: _textMuted, fontSize: 11)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecommendationsSection(AppState state, List<Dispositivo> alertas) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'RECOMENDACIONES',
-          style: TextStyle(
-            color: _textMuted,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.2,
-          ),
-        ),
+        const Text('RECOMENDACIONES', style: TextStyle(color: _textMuted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.2)),
         const SizedBox(height: 12),
-        ..._recommendations.map(_buildRecommendationCard),
+        // Recomendación global si hay sobrecarga
+        if (state.totalWatts >= 3000)
+          _buildRecommendationCard('Por favor, apaga o desconecta dispositivos de alto consumo para evitar una falla eléctrica.'),
+        // Recomendación por cada dispositivo con alerta
+        ...alertas.map((d) {
+          final isExcesivo = d.watts >= AppState.umbralExcesivo;
+          final msg = isExcesivo
+              ? 'Asegúrate de no dejar ${d.nombre} encendido si no es necesario.'
+              : 'Revisa si puedes activar el modo ahorro en ${d.nombre}.';
+          return _buildRecommendationCard(msg);
+        }),
       ],
     );
   }
@@ -198,70 +194,16 @@ class AlertsScreen extends StatelessWidget {
       decoration: BoxDecoration(
         color: _cardGreen,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: _accent.withOpacity(0.15),
-          width: 1,
-        ),
+        border: Border.all(color: _accent.withOpacity(0.15), width: 1),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '💡',
-            style: TextStyle(fontSize: 16),
-          ),
+          const Text('💡', style: TextStyle(fontSize: 16)),
           const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(
-                color: _textPrimary,
-                fontSize: 13.5,
-                height: 1.4,
-              ),
-            ),
-          ),
+          Expanded(child: Text(text, style: const TextStyle(color: _textPrimary, fontSize: 13.5, height: 1.4))),
         ],
       ),
-    );
-  }
-
-  Widget _buildBottomNav() {
-    return Container(
-      decoration: BoxDecoration(
-        color: _cardBg,
-        border: Border(
-          top: BorderSide(color: Colors.white.withOpacity(0.06), width: 1),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _navItem(Icons.home_rounded, 'Inicio'),
-          _navItem(Icons.devices_outlined, 'Dispositivos'),
-          _navItem(Icons.notifications_rounded, 'Alertas', selected: true),
-          _navItem(Icons.settings_outlined, 'Config'),
-        ],
-      ),
-    );
-  }
-
-  Widget _navItem(IconData icon, String label, {bool selected = false}) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: selected ? _accent : _textMuted, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            color: selected ? _accent : _textMuted,
-            fontSize: 11,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-          ),
-        ),
-      ],
     );
   }
 }
