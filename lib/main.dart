@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:enerlex_flutter_project/app_state.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/login_screen.dart';
+import 'screens/main_scaffold.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://gmebzrctmdnpmesiabzy.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtZWJ6cmN0bWRucG1lc2lhYnp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAzMTM2MTgsImV4cCI6MjA5NTg4OTYxOH0.QE70ERWDYluSmnuOw88VcweE9gw2arDpqN1-0dL10e0',
+  );
+
   runApp(const EnerLexApp());
 }
 
@@ -21,11 +30,13 @@ class _EnerLexAppState extends State<EnerLexApp> {
 
   void setThemeMode(ThemeMode mode) {
     setState(() => _themeMode = mode);
-    AppState().setDarkMode(mode == ThemeMode.dark);
   }
 
   @override
   Widget build(BuildContext context) {
+    // Si hay sesión activa ir directo al home
+    final session = Supabase.instance.client.auth.currentSession;
+
     return MaterialApp(
       title: 'EnerLex',
       debugShowCheckedModeBanner: false,
@@ -39,9 +50,8 @@ class _EnerLexAppState extends State<EnerLexApp> {
         brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFF2F4F8),
         fontFamily: 'Roboto',
-        cardColor: const Color(0xFFFFFFFF),
       ),
-      home: const LoginScreen(),
+      home: session != null ? const MainScaffold() : const LoginScreen(),
     );
   }
 }

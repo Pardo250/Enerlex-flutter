@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:enerlex_flutter_project/app_state.dart';
+import 'dart:math' as math;
 import 'login_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -17,14 +18,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _obscureCurrent = true;
   bool _obscureNew = true;
 
-  static const Color _background = Color(0xFF0F1117);
-  static const Color _cardBg = Color(0xFF1A1D27);
-  static const Color _accent = Color(0xFF00E5A0);
-  static const Color _textMuted = Color(0xFF6B7280);
+  static const Color _background  = Color(0xFF0F1117);
+  static const Color _cardBg      = Color(0xFF1A1D27);
+  static const Color _accent      = Color(0xFF00E5A0);
+  static const Color _textMuted   = Color(0xFF6B7280);
   static const Color _textPrimary = Color(0xFFE5E7EB);
-  static const Color _fieldBg = Color(0xFF1E2130);
-  static const Color _redColor = Color(0xFFEF4444);
-  static const Color _redBg = Color(0xFF2A1A1A);
+  static const Color _fieldBg     = Color(0xFF1E2130);
+  static const Color _redColor    = Color(0xFFEF4444);
+  static const Color _redBg       = Color(0xFF2A1A1A);
 
   final List<double> _monthlyData = [95, 110, 88, 125, 140, 130.8];
   final List<String> _months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
@@ -43,17 +44,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.dispose();
   }
 
-  void _guardarNombre() {
+  Future<void> _guardarNombre() async {
     final nuevoNombre = _nameController.text.trim();
     if (nuevoNombre.isEmpty) {
       _showSnack('El nombre no puede estar vacío.', error: true);
       return;
     }
-    AppState().actualizarNombre(nuevoNombre);
-    _showSnack('Nombre actualizado correctamente.');
+
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // Actualizar en Supabase
+      await Supabase.instance.client
+          .from('perfiles')
+          .update({'nombre': nuevoNombre})
+          .eq('id', user.id);
+
+      // Actualizar en AppState
+      AppState().actualizarNombre(nuevoNombre);
+      _showSnack('Nombre actualizado correctamente.');
+    } catch (e) {
+      _showSnack('Error al actualizar el nombre.', error: true);
+    }
   }
 
-  void _actualizarPassword() {
+  Future<void> _actualizarPassword() async {
     final actual = _currentPasswordController.text;
     final nueva = _newPasswordController.text;
 
@@ -61,18 +77,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _showSnack('Completa ambos campos de contraseña.', error: true);
       return;
     }
-    if (actual != AppState().password) {
-      _showSnack('La contraseña actual no es correcta.', error: true);
-      return;
-    }
     if (nueva.length < 6) {
       _showSnack('La nueva contraseña debe tener al menos 6 caracteres.', error: true);
       return;
     }
-    AppState().actualizarPassword(nueva);
-    _currentPasswordController.clear();
-    _newPasswordController.clear();
-    _showSnack('Contraseña actualizada correctamente.');
+
+    try {
+      // Verificar contraseña actual intentando reautenticar
+      final correo = AppState().correo;
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: correo,
+        password: actual,
+      );
+
+      // Actualizar contraseña en Supabase
+      await Supabase.instance.client.auth.updateUser(
+        UserAttributes(password: nueva),
+      );
+
+      AppState().actualizarPassword(nueva);
+      _currentPasswordController.clear();
+      _newPasswordController.clear();
+      _showSnack('Contraseña actualizada correctamente.');
+    } catch (e) {
+      _showSnack('La contraseña actual no es correcta.', error: true);
+    }
   }
 
   void _eliminarCuenta() {
@@ -82,23 +111,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
         backgroundColor: _cardBg,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('¿Eliminar cuenta?', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w700)),
-        content: const Text('Esta acción es irreversible. Se eliminarán todos tus datos.', style: TextStyle(color: _textMuted)),
+        content: const Text('Esta acción es irreversible. Se eliminarán todos tus datos de Supabase.', style: TextStyle(color: _textMuted)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar', style: TextStyle(color: _textMuted))),
           TextButton(
-            onPressed: () {
-              AppState().cerrarSesion();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (route) => false,
-              );
+            onPressed: () async {
+              Navigator.pop(context);
+              await _confirmarEliminarCuenta();
             },
             child: const Text('Eliminar', style: TextStyle(color: _redColor, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmarEliminarCuenta() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // Eliminar datos del usuario en cascada (RLS lo maneja)
+      await Supabase.instance.client
+          .from('perfiles')
+          .delete()
+          .eq('id', user.id);
+
+      // Cerrar sesión
+      await Supabase.instance.client.auth.signOut();
+      AppState().cerrarSesion();
+
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      _showSnack('Error al eliminar la cuenta.', error: true);
+    }
   }
 
   void _showSnack(String msg, {bool error = false}) {
@@ -124,10 +176,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: Row(
                 children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.arrow_back, color: _textPrimary, size: 24),
-                  ),
+                  GestureDetector(onTap: () => Navigator.pop(context), child: const Icon(Icons.arrow_back, color: _textPrimary, size: 24)),
                   const SizedBox(width: 16),
                   const Text('Mi perfil', style: TextStyle(color: _textPrimary, fontSize: 20, fontWeight: FontWeight.w700)),
                 ],
@@ -139,14 +188,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Avatar + email
                     Center(
                       child: Column(
                         children: [
-                          CircleAvatar(
-                            radius: 40, backgroundColor: _accent,
-                            child: Text(user.inicial, style: const TextStyle(color: Colors.black, fontSize: 32, fontWeight: FontWeight.w700)),
-                          ),
+                          CircleAvatar(radius: 40, backgroundColor: _accent, child: Text(user.inicial, style: const TextStyle(color: Colors.black, fontSize: 32, fontWeight: FontWeight.w700))),
                           const SizedBox(height: 12),
                           Text(user.correo, style: const TextStyle(color: _textMuted, fontSize: 14)),
                         ],
